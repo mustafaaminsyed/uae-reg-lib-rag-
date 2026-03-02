@@ -1,0 +1,6 @@
+pypdf
+chromadb
+sentence-transformers
+python-dotenv
+tqdm
+rich
