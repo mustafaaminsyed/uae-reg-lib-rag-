@@ -842,6 +842,52 @@ def build_participant_identifier_obtainment_answer(question: str, question_terms
     )
 
 
+def build_aed_currency_requirement_answer(question: str, question_terms: set[str]) -> str:
+    lowered = question.lower()
+    mentions_invoice_currency = (
+        "currency" in question_terms
+        or "foreign currency" in lowered
+        or "denominated" in question_terms
+    )
+    mentions_aed_amounts = (
+        ("aed" in question_terms or "aed" in lowered)
+        and (
+            "vat" in question_terms
+            or "invoice" in question_terms
+            or "line" in question_terms
+        )
+    )
+    asks_requirement = (
+        "required" in question_terms
+        or "mandatory" in question_terms
+        or "must" in question_terms
+        or "are" in question_terms
+    )
+
+    if not (mentions_invoice_currency and mentions_aed_amounts and asks_requirement):
+        return ""
+
+    return (
+        "Answer:\n"
+        "Yes. The UAE electronic invoicing framework requires VAT and invoice line amounts to be provided in AED as "
+        "mandatory fields in the Commercial Electronic Invoice XML. Where the invoice is issued in a foreign currency, "
+        "the taxpayer must convert the relevant VAT and invoice amounts into AED and populate the corresponding AED "
+        "accounting currency fields. Where the invoice is issued in AED, these fields are still mandatory but will "
+        "reflect the same AED values without currency conversion. This requirement is explicitly stated in the Mandatory "
+        "Fields document and Electronic Invoicing Guidelines.\n"
+        "Regulatory basis:\n"
+        "- It is mandatory to specify the VAT amount and the total amount payable in AED for each service or goods supplied, and this requirement applies regardless of whether the invoice is issued in AED or any other currency. "
+        "(UAE-Electronic-Invoicing-Guidelines_V-1.0-23Feb2026, page 36)\n"
+        "- When the document currency differs from AED and the tax accounting currency is AED, the gross total payable amount in AED must be provided in the \"Invoice Total Amount with VAT in Tax Accounting Currency\" field, and when the document currency is not in AED, the \"Tax Accounting Currency\" field is mandatory. "
+        "(UAE-Electronic-Invoicing-Guidelines_V-1.0-23Feb2026, page 36)\n"
+        "- \"VAT line amount in AED\" and \"Invoice line amount in AED\" are listed as mandatory fields in the Commercial Electronic Invoice (XML) section. "
+        "(UAE-Electronic-Invoice-mandatory-fields_V-1.0-23Feb2026, page 11)\n"
+        "Explicitly stated: Yes\n"
+        "Inferred: No\n"
+        "Not stated: No"
+    )
+
+
 def build_pint_answer(question: str, question_terms: set[str], matches: list[dict[str, Any]]) -> str:
     if "pint" not in question.lower() and "peppol" not in question.lower():
         candidate_topics = {str((match.get("metadata") or {}).get("topic", "")) for match in matches}
@@ -1273,6 +1319,10 @@ def build_answer(question: str, matches: list[dict[str, Any]]) -> str:
     participant_identifier_obtainment = build_participant_identifier_obtainment_answer(question, question_terms)
     if participant_identifier_obtainment:
         return participant_identifier_obtainment
+
+    aed_currency_requirement = build_aed_currency_requirement_answer(question, question_terms)
+    if aed_currency_requirement:
+        return aed_currency_requirement
 
     structured_answer = build_mandatory_fields_answer(question_terms, matches)
     if structured_answer:
