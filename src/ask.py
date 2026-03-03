@@ -21,11 +21,23 @@ COLLECTION_NAME = "uae_reg_library"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 5
 MAX_TOP_K = 10
+DEFAULT_MIN_CITATIONS = 1
+DEFAULT_GUARDRAIL_RETRIES = 2
+RERANKER_OVERFETCH_MULTIPLIER = 2
+MAX_QUOTE_WORDS = 25
 SNIPPET_LENGTH = 280
 MAX_ANSWER_SENTENCES = 3
 MIN_SENTENCE_LENGTH = 40
 MAX_SENTENCE_LENGTH = 320
 MAX_ANSWER_CHUNKS = 3
+JSON_SCHEMA_KEYS = {
+    "answer",
+    "regulatory_basis",
+    "explicitly_stated",
+    "inferred",
+    "not_stated",
+    "notes",
+}
 GENERIC_QUERY_TERMS = {
     "what",
     "which",
@@ -129,11 +141,42 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional document family filter, for example: pint_ae, e_invoicing, vat",
     )
+    parser.add_argument(
+        "--min-citations",
+        type=int,
+        default=DEFAULT_MIN_CITATIONS,
+        help=f"Minimum supported citations required before a claim is returned (default: {DEFAULT_MIN_CITATIONS}).",
+    )
+    parser.add_argument(
+        "--reranker",
+        action="store_true",
+        help="Apply a lightweight lexical rerank pass after retrieval.",
+    )
+    parser.add_argument(
+        "--json-output",
+        action="store_true",
+        help="Print the guarded answer object as strict JSON.",
+    )
     return parser.parse_args()
 
 
 def normalize_question(question_parts: list[str]) -> str:
     return " ".join(part.strip() for part in question_parts if part.strip()).strip()
+
+
+def extract_question_analysis(question: str) -> tuple[list[str], set[str], set[str]]:
+    question_words = [
+        word.lower()
+        for word in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", question)
+        if len(word) > 2
+    ]
+    question_terms = set(question_words)
+    focus_terms = {
+        word
+        for word in question_words
+        if len(word) > 4 and word not in GENERIC_QUERY_TERMS
+    }
+    return question_words, question_terms, focus_terms
 
 
 def infer_topic_from_question(question: str) -> str:
@@ -888,6 +931,51 @@ def build_aed_currency_requirement_answer(question: str, question_terms: set[str
     )
 
 
+def build_erp_identifier_storage_answer(question: str, question_terms: set[str]) -> str:
+    lowered = question.lower()
+    mentions_erp_storage = (
+        ("erp" in question_terms or "master data" in lowered)
+        and (
+            "store" in question_terms
+            or "stored" in question_terms
+            or "storage" in question_terms
+            or "maintain" in question_terms
+        )
+    )
+    mentions_identifier = (
+        "trn" in question_terms
+        or "tin" in question_terms
+        or "corporate tax trn" in lowered
+    )
+    asks_separate_requirement = (
+        "separate" in question_terms
+        or "separately" in question_terms
+        or "require" in question_terms
+        or "required" in question_terms
+    )
+
+    if not (mentions_erp_storage and mentions_identifier and asks_separate_requirement):
+        return ""
+
+    return (
+        "Answer:\n"
+        "The current corpus does not explicitly state that businesses must store the Corporate Tax TRN or the TIN "
+        "as separate ERP master data fields for UAE electronic invoicing purposes. The materials define the identifiers "
+        "and describe when a person may need to register with the FTA, but they do not prescribe a separate ERP storage "
+        "requirement for master data.\n"
+        "Regulatory basis:\n"
+        "- A person within the scope of Electronic Invoicing but not required to register for Corporate Tax must register with the FTA. "
+        "(UAE-Electronic-Invoice-mandatory-fields_V-1.0-23Feb2026, page 4)\n"
+        "- TRN is a unique number issued by the FTA for each person registered for tax purposes. "
+        "(UAE-Electronic-Invoice-mandatory-fields_V-1.0-23Feb2026, page 6)\n"
+        "- If the person is not already registered with the FTA for tax purposes, they will need to register. "
+        "(UAE-Electronic-Invoicing-Guidelines_V-1.0-23Feb2026, page 40)\n"
+        "Explicitly stated: No\n"
+        "Inferred: No\n"
+        "Not stated: Yes"
+    )
+
+
 def build_pint_answer(question: str, question_terms: set[str], matches: list[dict[str, Any]]) -> str:
     if "pint" not in question.lower() and "peppol" not in question.lower():
         candidate_topics = {str((match.get("metadata") or {}).get("topic", "")) for match in matches}
@@ -1176,11 +1264,39 @@ def print_matches_header(console: Any) -> None:
     print("Retrieved matches (debug)")
 
 
+def trailing_citation_bounds(text: str) -> tuple[str, int] | None:
+    for marker, trim_index in ((". (", 1), (" (", 0)):
+        marker_index = text.rfind(marker)
+        if marker_index == -1:
+            continue
+
+        candidate = text[marker_index + len(marker) :].strip()
+        if not candidate.endswith(")"):
+            continue
+
+        inner = candidate[:-1].strip()
+        if ", page" not in inner.lower():
+            continue
+
+        return inner, marker_index + trim_index
+
+    return None
+
+
+def extract_trailing_citation(text: str) -> str:
+    bounds = trailing_citation_bounds(text)
+    if bounds is None:
+        return ""
+    return bounds[0]
+
+
 def collect_used_citations(answer_text: str) -> list[str]:
-    citations = re.findall(r"\(([^()]+?, page(?:s)? [^)]+)\)", answer_text)
     seen: set[str] = set()
     ordered: list[str] = []
-    for citation in citations:
+    for line in answer_text.splitlines():
+        citation = extract_trailing_citation(line.strip())
+        if not citation:
+            continue
         if citation in seen:
             continue
         seen.add(citation)
@@ -1292,17 +1408,7 @@ def query_collection(
 
 
 def build_answer(question: str, matches: list[dict[str, Any]]) -> str:
-    question_words = [
-        word.lower()
-        for word in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", question)
-        if len(word) > 2
-    ]
-    question_terms = set(question_words)
-    focus_terms = {
-        word
-        for word in question_words
-        if len(word) > 4 and word not in GENERIC_QUERY_TERMS
-    }
+    _, question_terms, focus_terms = extract_question_analysis(question)
 
     regulatory_assessment = build_regulatory_assessment_answer(question, question_terms)
     if regulatory_assessment:
@@ -1323,6 +1429,10 @@ def build_answer(question: str, matches: list[dict[str, Any]]) -> str:
     aed_currency_requirement = build_aed_currency_requirement_answer(question, question_terms)
     if aed_currency_requirement:
         return aed_currency_requirement
+
+    erp_identifier_storage = build_erp_identifier_storage_answer(question, question_terms)
+    if erp_identifier_storage:
+        return erp_identifier_storage
 
     structured_answer = build_mandatory_fields_answer(question_terms, matches)
     if structured_answer:
@@ -1365,6 +1475,489 @@ def build_answer(question: str, matches: list[dict[str, Any]]) -> str:
     return "\n".join(selected)
 
 
+def distance_sort_value(distance: Any) -> float:
+    try:
+        return float(distance)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def rerank_matches_by_question(question: str, matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    _, question_terms, _ = extract_question_analysis(question)
+    return sorted(
+        matches,
+        key=lambda match: (
+            -chunk_relevance_score(question_terms, match),
+            distance_sort_value(match.get("distance")),
+        ),
+    )
+
+
+def retrieve_matches(
+    collection: Any,
+    question: str,
+    top_k: int,
+    topic: str,
+    doc_family: str,
+    reranker_enabled: bool = False,
+) -> list[dict[str, Any]]:
+    query_top_k = top_k
+    if reranker_enabled:
+        query_top_k = min(MAX_TOP_K, max(top_k, top_k * RERANKER_OVERFETCH_MULTIPLIER))
+
+    matches = query_collection(
+        collection,
+        question,
+        top_k=query_top_k,
+        topic=topic,
+        doc_family=doc_family,
+    )
+
+    if not reranker_enabled:
+        return matches
+
+    return rerank_matches_by_question(question, matches)[:top_k]
+
+
+def normalize_page_value(page: Any) -> int | str:
+    if isinstance(page, int):
+        return page
+    if isinstance(page, float) and page.is_integer():
+        return int(page)
+
+    text = str(page).strip()
+    if text.isdigit():
+        return int(text)
+    return text or "n/a"
+
+
+def build_supported_regulatory_basis(
+    question: str,
+    matches: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    if not matches:
+        return []
+
+    _, question_terms, focus_terms = extract_question_analysis(question)
+    ranked_matches = rerank_matches_by_question(question, matches)
+    basis: list[dict[str, Any]] = []
+    seen_refs: set[tuple[str, str]] = set()
+
+    for match in ranked_matches:
+        metadata = match.get("metadata") or {}
+        doc = str(metadata.get("doc_title", "Unknown document"))
+        page = normalize_page_value(metadata.get("page", "n/a"))
+        ref_key = (doc, str(page))
+        if ref_key in seen_refs:
+            continue
+
+        quote = best_sentence_from_match(question_terms, focus_terms, match)
+        if not quote:
+            quote = make_snippet(match.get("document", ""), max_length=220)
+
+        normalized_quote = " ".join(str(quote).split()).strip()
+        quote_words = normalized_quote.split()
+        if len(quote_words) > MAX_QUOTE_WORDS:
+            truncated_words = quote_words[: max(1, MAX_QUOTE_WORDS - 1)]
+            normalized_quote = " ".join(truncated_words) + " ..."
+        if not normalized_quote:
+            continue
+
+        basis.append(
+            {
+                "doc": doc,
+                "page": page,
+                "quote": normalized_quote,
+            }
+        )
+        seen_refs.add(ref_key)
+
+        if len(basis) >= limit:
+            break
+
+    return basis
+
+
+def parse_legacy_boolean(answer_text: str, label: str) -> bool | None:
+    match = re.search(rf"{re.escape(label)}:\s*(Yes|No)\b", answer_text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).lower() == "yes"
+
+
+def strip_citation_suffix(text: str) -> str:
+    bounds = trailing_citation_bounds(text)
+    if bounds is None:
+        return text.strip()
+    _, trim_index = bounds
+    return text[:trim_index].strip()
+
+
+def extract_legacy_answer_body(answer_text: str) -> str:
+    structured_match = re.search(
+        r"Answer:\s*(.*?)\s*Regulatory basis:",
+        answer_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if structured_match:
+        return " ".join(structured_match.group(1).split()).strip()
+
+    lines: list[str] = []
+    for line in answer_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        lowered = stripped.lower()
+        if lowered.startswith(
+            (
+                "answer:",
+                "regulatory basis:",
+                "explicitly stated:",
+                "inferred:",
+                "not stated:",
+            )
+        ):
+            continue
+
+        cleaned = strip_citation_suffix(stripped.lstrip("- ").strip())
+        if cleaned:
+            lines.append(cleaned)
+
+    return " ".join(lines).strip()
+
+
+def normalize_notes(notes: list[str]) -> list[str]:
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for note in notes:
+        compact = " ".join(str(note).split()).strip()
+        if not compact or compact in seen:
+            continue
+        seen.add(compact)
+        normalized.append(compact)
+    return normalized
+
+
+def build_not_stated_payload(
+    notes: list[str] | None = None,
+    regulatory_basis: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "answer": "The retrieved materials do not support a grounded claim for this question.",
+        "regulatory_basis": regulatory_basis or [],
+        "explicitly_stated": False,
+        "inferred": False,
+        "not_stated": True,
+        "notes": normalize_notes(notes or ["No supported citations were available for this question."]),
+    }
+
+
+def build_candidate_answer_payload(
+    question: str,
+    matches: list[dict[str, Any]],
+    draft_answer: str,
+    min_citations: int,
+    evidence_only: bool = False,
+) -> dict[str, Any]:
+    basis_limit = max(min_citations, MAX_ANSWER_CHUNKS)
+    regulatory_basis = build_supported_regulatory_basis(question, matches, limit=basis_limit)
+
+    if evidence_only:
+        if len(regulatory_basis) < min_citations:
+            return build_not_stated_payload(
+                notes=["Retrieved evidence did not satisfy the minimum citation requirement."],
+                regulatory_basis=regulatory_basis,
+            )
+
+        answer = " ".join(
+            entry["quote"] for entry in regulatory_basis[: min(MAX_ANSWER_SENTENCES, len(regulatory_basis))]
+        ).strip()
+        return {
+            "answer": answer or "The retrieved materials do not support a grounded claim for this question.",
+            "regulatory_basis": regulatory_basis,
+            "explicitly_stated": True,
+            "inferred": False,
+            "not_stated": False,
+            "notes": ["Answer was rebuilt from retrieved evidence during guardrail repair."],
+        }
+
+    explicitly_stated = parse_legacy_boolean(draft_answer, "Explicitly stated")
+    inferred = parse_legacy_boolean(draft_answer, "Inferred")
+    not_stated = parse_legacy_boolean(draft_answer, "Not stated")
+    notes: list[str] = []
+
+    if "Answer:" in draft_answer:
+        notes.append("Normalized legacy structured answer into the guarded JSON schema.")
+        notes.append("Final answer text was rebuilt from citation-grounded regulatory basis quotes.")
+
+    if len(regulatory_basis) < min_citations:
+        notes.append("Legacy answer did not have enough supported citations in retrieved matches.")
+        not_stated = True
+
+    grounded_answer = ""
+    if regulatory_basis and not not_stated:
+        grounded_answer = " ".join(
+            entry["quote"] for entry in regulatory_basis[: min(MAX_ANSWER_SENTENCES, len(regulatory_basis))]
+        ).strip()
+
+    if not grounded_answer:
+        grounded_answer = "The retrieved materials do not support a grounded claim for this question."
+        not_stated = True
+
+    if explicitly_stated is None:
+        explicitly_stated = len(regulatory_basis) >= min_citations and not bool(not_stated)
+    if inferred is None:
+        inferred = False
+    if not_stated is None:
+        not_stated = len(regulatory_basis) < min_citations
+
+    if not_stated:
+        explicitly_stated = False
+        inferred = False
+
+    return {
+        "answer": grounded_answer,
+        "regulatory_basis": regulatory_basis,
+        "explicitly_stated": explicitly_stated,
+        "inferred": inferred,
+        "not_stated": not_stated,
+        "notes": normalize_notes(notes),
+    }
+
+
+def validate_answer_payload(
+    payload: dict[str, Any],
+    matches: list[dict[str, Any]],
+    min_citations: int,
+) -> list[str]:
+    reasons: list[str] = []
+    payload_keys = set(payload.keys())
+    missing_keys = sorted(JSON_SCHEMA_KEYS - payload_keys)
+    extra_keys = sorted(payload_keys - JSON_SCHEMA_KEYS)
+    if missing_keys:
+        reasons.append(f"missing_keys:{','.join(missing_keys)}")
+    if extra_keys:
+        reasons.append(f"extra_keys:{','.join(extra_keys)}")
+
+    if not isinstance(payload.get("answer"), str):
+        reasons.append("answer_must_be_string")
+    if not isinstance(payload.get("regulatory_basis"), list):
+        reasons.append("regulatory_basis_must_be_list")
+    if not isinstance(payload.get("explicitly_stated"), bool):
+        reasons.append("explicitly_stated_must_be_boolean")
+    if not isinstance(payload.get("inferred"), bool):
+        reasons.append("inferred_must_be_boolean")
+    if not isinstance(payload.get("not_stated"), bool):
+        reasons.append("not_stated_must_be_boolean")
+    if not isinstance(payload.get("notes"), list) or any(
+        not isinstance(note, str) for note in payload.get("notes", [])
+    ):
+        reasons.append("notes_must_be_list_of_strings")
+    if payload.get("not_stated") and (payload.get("explicitly_stated") or payload.get("inferred")):
+        reasons.append("not_stated_conflicts_with_flags")
+    if payload.get("not_stated") and not payload.get("notes"):
+        reasons.append("not_stated_requires_notes")
+
+    supported_refs = {
+        (
+            str((match.get("metadata") or {}).get("doc_title", "Unknown document")),
+            str(normalize_page_value((match.get("metadata") or {}).get("page", "n/a"))),
+        )
+        for match in matches
+    }
+
+    supported_citations = 0
+    for entry in payload.get("regulatory_basis", []):
+        if not isinstance(entry, dict):
+            reasons.append("regulatory_basis_entry_must_be_object")
+            continue
+
+        if {"doc", "page", "quote"} - set(entry.keys()):
+            reasons.append("regulatory_basis_entry_missing_fields")
+            continue
+
+        if not isinstance(entry.get("doc"), str):
+            reasons.append("regulatory_basis_doc_must_be_string")
+        quote = entry.get("quote", "")
+        if not isinstance(quote, str) or not quote.strip():
+            reasons.append("regulatory_basis_quote_must_be_non_empty_string")
+        elif len(quote.split()) > 25:
+            reasons.append("quote_too_long")
+
+        ref_key = (str(entry.get("doc", "")), str(normalize_page_value(entry.get("page", "n/a"))))
+        if ref_key not in supported_refs:
+            reasons.append(f"unsupported_citation:{ref_key[0]}|{ref_key[1]}")
+            continue
+
+        if isinstance(quote, str) and quote.strip():
+            supported_citations += 1
+
+    if payload.get("explicitly_stated") and supported_citations == 0:
+        reasons.append("explicit_claim_without_citation")
+    if supported_citations < min_citations and not payload.get("not_stated", False):
+        reasons.append(f"insufficient_supported_citations:{supported_citations}<{min_citations}")
+
+    if not payload.get("not_stated", False) and not str(payload.get("answer", "")).strip():
+        reasons.append("empty_answer")
+
+    return normalize_notes(reasons)
+
+
+def build_guarded_answer_payload(
+    question: str,
+    matches: list[dict[str, Any]],
+    min_citations: int = DEFAULT_MIN_CITATIONS,
+    max_retries: int = DEFAULT_GUARDRAIL_RETRIES,
+) -> tuple[dict[str, Any], list[str]]:
+    attempt_builders = [
+        lambda draft_answer: build_candidate_answer_payload(
+            question,
+            matches,
+            draft_answer,
+            min_citations=min_citations,
+            evidence_only=False,
+        )
+    ]
+    if max_retries > 0:
+        attempt_builders.append(
+            lambda draft_answer: build_candidate_answer_payload(
+                question,
+                matches,
+                draft_answer,
+                min_citations=min_citations,
+                evidence_only=True,
+            )
+        )
+
+    draft_answer = build_answer(question, matches)
+    validation_reasons: list[str] = []
+
+    for attempt_number, builder in enumerate(attempt_builders, start=1):
+        payload = builder(draft_answer)
+        reasons = validate_answer_payload(payload, matches, min_citations=min_citations)
+        if not reasons:
+            if attempt_number > 1:
+                payload["notes"] = normalize_notes(payload["notes"] + ["Guardrail retry path succeeded."])
+            return payload, validation_reasons
+
+        validation_reasons.extend(f"attempt_{attempt_number}:{reason}" for reason in reasons)
+
+    return build_not_stated_payload(validation_reasons), validation_reasons
+
+
+def build_query_result(
+    collection: Any,
+    question: str,
+    top_k: int,
+    topic: str,
+    doc_family: str,
+    min_citations: int,
+    reranker_enabled: bool,
+) -> dict[str, Any]:
+    effective_topic = topic or infer_topic_from_question(question)
+    effective_doc_family = doc_family or infer_doc_family_from_question(question)
+
+    try:
+        matches = retrieve_matches(
+            collection,
+            question,
+            top_k=top_k,
+            topic=effective_topic,
+            doc_family=effective_doc_family,
+            reranker_enabled=reranker_enabled,
+        )
+    except Exception as exc:
+        message = f"Query failed: {exc}"
+        return {
+            "question": question,
+            "effective_topic": effective_topic,
+            "effective_doc_family": effective_doc_family,
+            "matches": [],
+            "answer_json": build_not_stated_payload([message]),
+            "validation_reasons": [message],
+            "error": message,
+        }
+
+    if not matches:
+        note = f"No matches found for: {question}"
+        return {
+            "question": question,
+            "effective_topic": effective_topic,
+            "effective_doc_family": effective_doc_family,
+            "matches": [],
+            "answer_json": build_not_stated_payload([note]),
+            "validation_reasons": [note],
+            "error": "",
+        }
+
+    try:
+        answer_payload, validation_reasons = build_guarded_answer_payload(
+            question,
+            matches,
+            min_citations=min_citations,
+        )
+    except Exception as exc:
+        message = f"Answer synthesis failed: {exc}"
+        return {
+            "question": question,
+            "effective_topic": effective_topic,
+            "effective_doc_family": effective_doc_family,
+            "matches": matches,
+            "answer_json": build_not_stated_payload([message]),
+            "validation_reasons": [message],
+            "error": message,
+        }
+
+    return {
+        "question": question,
+        "effective_topic": effective_topic,
+        "effective_doc_family": effective_doc_family,
+        "matches": matches,
+        "answer_json": answer_payload,
+        "validation_reasons": validation_reasons,
+        "error": "",
+    }
+
+
+def citations_from_payload(answer_payload: dict[str, Any]) -> list[str]:
+    citations: list[str] = []
+    seen: set[str] = set()
+    for entry in answer_payload.get("regulatory_basis", []):
+        citation = f"{entry['doc']}, page {entry['page']}"
+        if citation in seen:
+            continue
+        seen.add(citation)
+        citations.append(citation)
+    return citations
+
+
+def format_answer_payload(answer_payload: dict[str, Any]) -> str:
+    lines = [
+        answer_payload["answer"],
+        "",
+        f"Explicitly stated: {'Yes' if answer_payload['explicitly_stated'] else 'No'}",
+        f"Inferred: {'Yes' if answer_payload['inferred'] else 'No'}",
+        f"Not stated: {'Yes' if answer_payload['not_stated'] else 'No'}",
+    ]
+
+    regulatory_basis = answer_payload.get("regulatory_basis", [])
+    if regulatory_basis:
+        lines.append("")
+        lines.append("Regulatory basis:")
+        for entry in regulatory_basis:
+            lines.append(f"- {entry['doc']}, page {entry['page']}: {entry['quote']}")
+
+    notes = answer_payload.get("notes", [])
+    if notes:
+        lines.append("")
+        lines.append("Notes:")
+        for note in notes:
+            lines.append(f"- {note}")
+
+    return "\n".join(lines)
+
+
 def run_query(
     collection: Any,
     console: Any,
@@ -1372,31 +1965,32 @@ def run_query(
     top_k: int,
     topic: str,
     doc_family: str,
+    min_citations: int,
+    reranker_enabled: bool,
     retrieval_only: bool,
     show_matches: bool,
+    json_output: bool,
 ) -> None:
     print_question_header(console, question)
-    effective_topic = topic or infer_topic_from_question(question)
-    effective_doc_family = doc_family or infer_doc_family_from_question(question)
+    result = build_query_result(
+        collection,
+        question,
+        top_k=top_k,
+        topic=topic,
+        doc_family=doc_family,
+        min_citations=min_citations,
+        reranker_enabled=reranker_enabled,
+    )
+    effective_topic = result["effective_topic"]
+    effective_doc_family = result["effective_doc_family"]
+    matches = result["matches"]
 
-    try:
-        matches = query_collection(
-            collection,
-            question,
-            top_k=top_k,
-            topic=effective_topic,
-            doc_family=effective_doc_family,
-        )
-    except Exception as exc:
-        message = f"Query failed: {exc}"
+    if result["error"]:
+        message = result["error"]
         if console:
             console.print(f"[red]{message}[/red]")
         else:
             print(message)
-        return
-
-    if not matches:
-        print_no_results(console, question)
         return
 
     if effective_topic:
@@ -1411,11 +2005,26 @@ def run_query(
             print_warning(console, f"Inferred document family: {effective_doc_family}")
 
     if not retrieval_only:
-        answer_text = build_answer(question, matches)
+        if not matches:
+            print_no_results(console, question)
+
+        answer_payload = result["answer_json"]
+        answer_text = (
+            json.dumps(answer_payload, ensure_ascii=False, indent=2)
+            if json_output
+            else format_answer_payload(answer_payload)
+        )
         print_answer(console, answer_text)
-        print_used_citations(console, collect_used_citations(answer_text))
+        print_used_citations(console, citations_from_payload(answer_payload))
+        if result["validation_reasons"]:
+            print_warning(console, "Guardrail validation notes: " + "; ".join(result["validation_reasons"]))
+    elif not matches:
+        print_no_results(console, question)
+        return
 
     if retrieval_only or show_matches:
+        if not matches:
+            return
         print_matches_header(console)
         for index, match in enumerate(matches, start=1):
             print_match(console, index, match)
@@ -1449,8 +2058,11 @@ def run_loop(
     top_k: int,
     topic: str,
     doc_family: str,
+    min_citations: int,
+    reranker_enabled: bool,
     retrieval_only: bool,
     show_matches: bool,
+    json_output: bool,
 ) -> None:
     print_startup(console, collection)
 
@@ -1474,8 +2086,11 @@ def run_loop(
             top_k=top_k,
             topic=topic,
             doc_family=doc_family,
+            min_citations=min_citations,
+            reranker_enabled=reranker_enabled,
             retrieval_only=retrieval_only,
             show_matches=show_matches,
+            json_output=json_output,
         )
 
 
@@ -1491,6 +2106,9 @@ def main() -> None:
     top_k = max(1, min(args.top_k, MAX_TOP_K))
     if top_k != args.top_k:
         print_warning(console, f"Using top_k={top_k} (allowed range: 1-{MAX_TOP_K}).")
+    min_citations = max(1, args.min_citations)
+    if min_citations != args.min_citations:
+        print_warning(console, f"Using min_citations={min_citations} (minimum is 1).")
 
     topic = args.topic.strip()
     doc_family = args.doc_family.strip()
@@ -1504,8 +2122,11 @@ def main() -> None:
             top_k=top_k,
             topic=topic,
             doc_family=doc_family,
+            min_citations=min_citations,
+            reranker_enabled=args.reranker,
             retrieval_only=args.retrieval_only,
             show_matches=args.show_matches,
+            json_output=args.json_output,
         )
         return
 
@@ -1515,8 +2136,11 @@ def main() -> None:
         top_k=top_k,
         topic=topic,
         doc_family=doc_family,
+        min_citations=min_citations,
+        reranker_enabled=args.reranker,
         retrieval_only=args.retrieval_only,
         show_matches=args.show_matches,
+        json_output=args.json_output,
     )
 
 

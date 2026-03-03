@@ -1,3 +1,5 @@
 .venv/
+.venv312local/
 __pycache__/
 *.log
+reports/

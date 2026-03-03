@@ -1,0 +1,48 @@
+{"id":"vat_registration_thresholds","question":"What are VAT registration thresholds?","topic":"uae_vat","doc_family":"vat","min_citations":1,"expected_docs":["Federal Decree by Law No. (8) of 2017 Concerning Value-Added Tax (VAT)"]}
+{"id":"vat_mandatory_registration_article","question":"What does Article 13 say about mandatory VAT registration?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_voluntary_registration_threshold","question":"What does the VAT law say about the voluntary registration threshold?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_threshold_calculation","question":"How is the tax registration threshold calculated under the VAT law?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_capital_assets_exclusion","question":"Are capital assets disregarded when determining whether a person exceeds the VAT registration threshold?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_registration_cancellation","question":"What does the VAT law say about tax registration cancellation?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_executive_regulation_reference","question":"What does the Executive Regulation say about VAT registration thresholds?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_handbook_registration_guidance","question":"What does the VAT handbook say about registration thresholds?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"vat_threshold_question_alt","question":"Which supplies are considered when determining whether a person exceeds the VAT registration threshold?","topic":"uae_vat","doc_family":"vat","min_citations":1}
+{"id":"mandatory_invoice_fields","question":"What are mandatory fields for UAE electronic invoice?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1,"expected_docs":["UAE-Electronic-Invoice-mandatory-fields_V-1.0-23Feb2026"]}
+{"id":"e_invoice_document_purpose","question":"What is the purpose of the UAE electronic invoice mandatory fields document?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_read_in_conjunction","question":"What documents should the UAE electronic invoice mandatory fields document be read in conjunction with?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_participant_identifier_basis","question":"What is the participant identifier for UAE electronic invoicing based on?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_tin_definition","question":"How is TIN defined in the UAE electronic invoice mandatory fields document?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_tax_group_tin","question":"If a business is part of a tax group, which TIN should it use for UAE e-invoicing?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"aed_currency_requirement","question":"Are VAT and invoice line amounts in AED mandatory when the invoice is issued in a foreign currency?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1,"expected_docs":["UAE-Electronic-Invoicing-Guidelines_V-1.0-23Feb2026","UAE-Electronic-Invoice-mandatory-fields_V-1.0-23Feb2026"]}
+{"id":"e_invoice_tax_accounting_currency_requirement","question":"When the document currency is not AED, is the tax accounting currency field mandatory?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_vat_line_amount_field","question":"Which field should contain the VAT amount for each service or goods supplied in the UAE electronic invoicing guidelines?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_amount_payable_field","question":"Which field should contain the total amount payable in the UAE electronic invoicing guidelines?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_public_consultation_dictionary","question":"What does the UAE eInvoicing public consultation document say about data dictionary content?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_mandatory_fields_version","question":"What version and date are shown on the UAE electronic invoice mandatory fields document?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_foreign_currency_amounts","question":"What do the guidelines say about providing VAT and total payable amounts in AED when the invoice is issued in a foreign currency?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_tax_accounting_total_amount","question":"What is the invoice total amount with VAT in tax accounting currency field used for?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_vat_line_amount_aed","question":"Is VAT line amount in AED listed as a mandatory field in the commercial electronic invoice XML?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"e_invoice_invoice_line_amount_aed","question":"Is invoice line amount in AED listed as a mandatory field in the commercial electronic invoice XML?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"pint_business_term","question":"What does BTAE-23 mean in PINT-AE?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_btae_21","question":"What does BTAE-21 mean in PINT-AE?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_btae_22","question":"What does BTAE-22 mean in PINT-AE?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_transaction_type_codes","question":"What are the allowed codes in the PINT-AE transaction type code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_tax_category_codes","question":"What are the allowed codes in the PINT-AE tax category code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_tax_exemption_codes","question":"What are the allowed codes in the PINT-AE tax exemption code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_currency_codes","question":"What are the allowed codes in the PINT-AE currency code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_country_codes","question":"What are the allowed codes in the PINT-AE country code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_unit_codes","question":"What are the allowed codes in the PINT-AE unit of measure code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_mime_codes","question":"What are the allowed codes in the PINT-AE mime code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_item_type_codes","question":"What are the allowed codes in the PINT-AE item type code list?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_schematron_rule","question":"What does rule ibr-139-ae say in PINT-AE?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_compliance_scope","question":"What does the PINT-AE compliance document define?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_release_notes","question":"What is described in the PINT-AE specialized release notes?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_standard_tax_invoice_example","question":"What does the PINT-AE standard tax invoice example cover?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_commercial_invoice_example","question":"What does the PINT-AE commercial invoice example cover?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_margin_scheme_example","question":"What does the PINT-AE margin scheme example cover?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_reverse_charge_example","question":"What does the PINT-AE supply under reverse charge mechanism example cover?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"pint_zero_rated_example","question":"What does the PINT-AE zero rated supplies example cover?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"trn_tin_prefix_match_explicit_statement","question":"Do the materials explicitly state that the first 10 digits of a VAT TRN are always identical to the first 10 digits of a Corporate Tax TRN?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1,"allow_not_stated":true}
+{"id":"tax_group_representative_tin_question","question":"For UAE e-invoicing, should a tax group member use the tax group representative's TIN?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1}
+{"id":"seller_identifier_distinction","question":"Does PINT-AE distinguish between the seller VAT identifier and the seller VAT registration identifier?","topic":"uae_pint","doc_family":"pint_ae","min_citations":1}
+{"id":"erp_identifier_storage_requirement","question":"Does the UAE electronic invoicing framework require businesses to store Corporate Tax TRN or TIN separately in their ERP master data for electronic invoicing purposes?","topic":"uae_einvoicing","doc_family":"e_invoicing","min_citations":1,"expected_not_stated":true,"must_contain":["do not support"]}
