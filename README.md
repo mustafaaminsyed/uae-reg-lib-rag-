@@ -14,6 +14,8 @@
 pip install -r requirements.txt
 ```
 
+The dependency versions are pinned so the project behavior is more reproducible across machines.
+
 ## Usage
 
 1. Add your source files under:
@@ -28,6 +30,12 @@ You can place PDFs directly under these folders. You can also place a PINT-AE re
 ```powershell
 .\.venv\Scripts\python.exe src/ingest.py
 ```
+
+This creates:
+- `docs_processed/` with extracted and normalized JSON
+- `index_store/` with the persistent ChromaDB index
+
+These generated folders are now allowed in Git so you can optionally back them up to GitHub for portability. If they are already committed, another machine can clone the repo and use the current index directly. If the source corpus changes, re-run ingestion to refresh them.
 
 3. Run the question interface in interactive mode:
 
@@ -72,6 +80,13 @@ You can place PDFs directly under these folders. You can also place a PINT-AE re
 - Tax Group / VAT Group identifier questions
 - UAE electronic invoice mandatory field counts and field lists
 - PINT-AE business term, codelist, and selected schematron rule lookups
+
+## Portability
+
+- The repo now pins exact package versions in `requirements.txt`.
+- The generated `docs_processed/` and `index_store/` folders can be committed to GitHub as a backup snapshot.
+- This makes it easier to open the project on another machine with the same source corpus, processed data, and current index.
+- If you add or change source documents, run ingestion again and commit the refreshed generated folders if you want GitHub to reflect the latest snapshot.
 
 ## Answering Rules
 

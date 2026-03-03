@@ -1,0 +1,11 @@
+{
+  "source_path": "docs_raw/uae_einvoicing/uae_e_invoicing_requirements_20260225115628.pdf",
+  "topic": "uae_einvoicing",
+  "doc_title": "uae_e_invoicing_requirements_20260225115628",
+  "pages": [
+    {
+      "page_num": 1,
+      "text": "UAE Electronic Invoicing Mandate V 1.0 (2026) Electronic Tax Invoice: Mandatory Fields Overview 51 Mandatory Fields Invoice Details 1.Invoice number 2.Invoice date 3.Invoice type code 4.Invoice currency code 5.Transaction type code 6.Payment due date 7.Business process type 8.Specification identifier 9.Payment means type code Note: Transaction types include FTZ, Deemed Supply, Continuous Supply, etc. Seller Information 10.Seller name 11.Seller electronic address 12.Seller electronic identifier 13.Seller legal reg. identifier 14.Legal reg. ID type 15.Seller tax identifier 16.Seller tax scheme code 17.Seller address line 1 18.Seller city 19.Seller country subdivision 20.Seller country code Buyer Information 21.Buyer name 22.Buyer electronic address 23.Buyer electronic identifier 24.Buyer tax identifier 25.Buyer tax scheme code 26.Buyer address line 1 27.Buyer city 28.Buyer country subdivision 29.Buyer country code Financials & Lines Document Totals 30.Sum of Invoice line net amount 31.Invoice total amount (excl. tax) 32.Invoice total tax amount 33.Invoice total amount (incl. tax) 34.Amount due for payment 35.Tax category taxable amount 36.Tax category tax amount 37.Tax category code 38.Tax category rate Line Item Details 39.Invoice line identifier 40.Invoiced quantity 41.Unit of measure code 42.Invoice line net amount 43.Item net price 44.Item gross price 45.Item price base quantity 46.Invoiced item tax category code 47.Invoiced item tax rate 48.VAT line amount in AED 49.Invoice line amount in AED 50.Item name 51.Item description"
+    }
+  ]
+}

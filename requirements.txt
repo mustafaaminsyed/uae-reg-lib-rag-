@@ -1,6 +1,6 @@
-pypdf
-chromadb
-sentence-transformers
-python-dotenv
-tqdm
-rich
+pypdf==6.7.5
+chromadb==1.5.2
+sentence-transformers==5.2.3
+python-dotenv==1.2.2
+tqdm==4.67.3
+rich==14.3.3
