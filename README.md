@@ -2,13 +2,27 @@
 
 ## Setup
 
-1. Activate the virtual environment:
+Use Python `3.12` (recommended) or `3.13` for this project. Python `3.14` is not currently supported by the pinned `chromadb` dependency stack used here.
+
+1. Create the virtual environment:
+
+```powershell
+python -m venv .venv
+```
+
+If you use `uv`, it should target Python `3.12` explicitly:
+
+```powershell
+uv venv --python 3.12 .venv
+```
+
+2. Activate the virtual environment:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-2. Install dependencies:
+3. Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
