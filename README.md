@@ -188,6 +188,7 @@ See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the full workflow and metric 
 
 - The repo now pins exact package versions in `requirements.txt`.
 - The generated `docs_processed/` and `index_store/` folders can be committed to GitHub as a backup snapshot.
+- `index_store/chroma.sqlite3` is tracked via Git LFS to reduce normal Git history bloat.
 - This makes it easier to open the project on another machine with the same source corpus, processed data, and current index.
 - If you add or change source documents, run ingestion again and commit the refreshed generated folders if you want GitHub to reflect the latest snapshot.
 - Future ingestion remains non-disruptive after the text-variant update because the richer processed schema is additive. New documents can be ingested normally; a rebuild is only recommended when you want older indexed PDFs to benefit from the new line-preserved chunks.
