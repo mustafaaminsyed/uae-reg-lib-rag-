@@ -1,0 +1,12 @@
+{"question":"What is the difference between a TIN and a TRN in UAE e-invoicing?","category":"compare_identifier"}
+{"question":"How is TIN defined in the UAE electronic invoice mandatory fields document?","category":"definition"}
+{"question":"For UAE e-invoicing, should a tax group member use the tax group representative's TIN?","category":"tax_group_scope"}
+{"question":"When must a tax invoice be issued under UAE VAT?","category":"rule_timing"}
+{"question":"By when must a tax credit note be issued?","category":"rule_timing"}
+{"question":"What is the legal basis for mandatory UAE electronic invoicing?","category":"legal_basis"}
+{"question":"Does electronic invoicing apply to free zone entities in the UAE?","category":"yes_no_scope"}
+{"question":"What are mandatory fields for UAE electronic invoices?","category":"named_enumeration"}
+{"question":"List the mandatory fields and cite the source for each item.","category":"named_enumeration"}
+{"question":"Which mandatory fields are for exports only?","category":"subset"}
+{"question":"What are VAT registration thresholds in the UAE?","category":"vat_threshold"}
+{"question":"What does IBT-024 mean in PINT-AE?","category":"pint_definition"}

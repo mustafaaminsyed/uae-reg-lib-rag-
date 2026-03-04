@@ -8,6 +8,7 @@ const answerCard = document.getElementById("answer-card");
 const answerContent = document.getElementById("answer-content");
 const confidenceCard = document.getElementById("confidence-card");
 const confidenceValue = document.getElementById("confidence-value");
+const confidenceBand = document.getElementById("confidence-band");
 const confidenceFill = document.getElementById("confidence-fill");
 const confidenceNote = document.getElementById("confidence-note");
 const citationsList = document.getElementById("citations-list");
@@ -15,15 +16,21 @@ const matchesList = document.getElementById("matches-list");
 const metricsGrid = document.getElementById("metrics-grid");
 const evidenceCount = document.getElementById("evidence-count");
 const inlineProgress = document.getElementById("inline-progress");
+const rerankingLabel = document.getElementById("reranking-label");
+const rerankerInput = document.getElementById("reranker_enabled");
 const topKInput = document.getElementById("top_k");
 const topKValue = document.getElementById("top_k_value");
 const citationTemplate = document.getElementById("citation-template");
 const matchTemplate = document.getElementById("match-template");
-const progressChips = Array.from(document.querySelectorAll(".progress-chip"));
+const inlineRunButton = document.getElementById("run-query-inline");
+const stepperItems = Array.from(document.querySelectorAll(".stepper-item"));
 const exampleButtons = Array.from(document.querySelectorAll(".example-chip"));
+const questionCount = document.getElementById("question-count");
 
 let stageTimers = [];
 let flashTimerId = 0;
+let activeRerankerEnabled = Boolean(rerankerInput && rerankerInput.checked);
+const STEPPER_ORDER = ["query", "retrieval", "reranking", "answer"];
 
 function escapeHtml(value) {
   return String(value)
@@ -99,51 +106,99 @@ function getAnswerSegments(data) {
   return [];
 }
 
+function getStepperItem(stepName) {
+  return stepperItems.find((item) => item.dataset.step === stepName);
+}
+
+function updateRerankingPresentation(rerankerEnabled) {
+  const rerankingItem = getStepperItem("reranking");
+  if (!rerankingItem || !rerankingLabel) {
+    return;
+  }
+  rerankingLabel.textContent = rerankerEnabled ? "Reranking" : "Reranking: Off";
+  rerankingItem.classList.toggle("is-muted", !rerankerEnabled);
+}
+
+function renderStepper(state, rerankerEnabled, isComplete = false) {
+  updateRerankingPresentation(rerankerEnabled);
+  const currentIndex = STEPPER_ORDER.indexOf(state);
+  stepperItems.forEach((item) => {
+    item.classList.remove("is-active", "is-complete");
+  });
+
+  if (currentIndex < 0) {
+    return;
+  }
+
+  STEPPER_ORDER.forEach((name, index) => {
+    const item = getStepperItem(name);
+    if (!item) {
+      return;
+    }
+    if (name === "reranking" && !rerankerEnabled) {
+      return;
+    }
+    if (isComplete || index < currentIndex) {
+      item.classList.add("is-complete");
+      return;
+    }
+    if (index === currentIndex) {
+      item.classList.add("is-active");
+    }
+  });
+}
+
 function resetStageTimers() {
   stageTimers.forEach((timerId) => window.clearTimeout(timerId));
   stageTimers = [];
 }
 
-function setProgressState(stage, active) {
-  const target = progressChips.find((chip) => chip.dataset.stage === stage);
-  if (!target) {
-    return;
-  }
-  target.classList.toggle("is-active", Boolean(active));
-}
-
 function hideProgress() {
   resetStageTimers();
-  progressChips.forEach((chip) => chip.classList.remove("is-active"));
-  inlineProgress.hidden = true;
+  renderStepper("answer", activeRerankerEnabled, true);
 }
 
 function startLoadingStages(rerankerEnabled) {
+  activeRerankerEnabled = rerankerEnabled;
   resetStageTimers();
-  inlineProgress.hidden = false;
-  progressChips.forEach((chip) => chip.classList.remove("is-active"));
-  setProgressState("searching", true);
+  renderStepper("query", rerankerEnabled);
   setStatus("Searching regulatory corpus...");
 
   stageTimers.push(
     window.setTimeout(() => {
-      setProgressState("searching", false);
-      setProgressState("retrieving", true);
-      setStatus(rerankerEnabled ? "Retrieving documents and reranking..." : "Retrieving documents...");
+      renderStepper("retrieval", rerankerEnabled);
+      setStatus("Retrieving documents...");
     }, 320),
   );
 
-  stageTimers.push(
-    window.setTimeout(() => {
-      setProgressState("retrieving", false);
-      setProgressState("generating", true);
-      setStatus("Generating answer...");
-    }, 760),
-  );
+  if (rerankerEnabled) {
+    stageTimers.push(
+      window.setTimeout(() => {
+        renderStepper("reranking", rerankerEnabled);
+        setStatus("Reranking retrieved passages...");
+      }, 720),
+    );
+    stageTimers.push(
+      window.setTimeout(() => {
+        renderStepper("answer", rerankerEnabled);
+        setStatus("Generating answer...");
+      }, 1060),
+    );
+  } else {
+    stageTimers.push(
+      window.setTimeout(() => {
+        renderStepper("answer", rerankerEnabled);
+        setStatus("Generating answer...");
+      }, 760),
+    );
+  }
 }
 
 function updateComposerPreview() {
   const text = questionInput.value.trim();
+  if (questionCount) {
+    questionCount.textContent = `${questionInput.value.length} character${questionInput.value.length === 1 ? "" : "s"}`;
+  }
   composerPreview.textContent = text
     ? `Current question: ${text}`
     : "Results will appear below with grounded sources.";
@@ -154,14 +209,27 @@ function resetOutputForNewRequest() {
   answerContent.classList.add("empty-text");
   answerContent.textContent = "Working on your query...";
   confidenceCard.classList.add("is-empty");
-  confidenceValue.textContent = "n/a";
+  confidenceValue.textContent = "Not yet rated";
+  confidenceBand.textContent = "Run a query to generate a confidence assessment.";
+  confidenceBand.className = "confidence-band";
   confidenceFill.style.width = "0%";
-  confidenceNote.textContent = "Derived from citation scores.";
+  confidenceNote.textContent = "Confidence is derived from citation coverage and source authority.";
   routingLine.textContent = "Processing query...";
   citationsList.className = "sources-list";
   citationsList.textContent = "Preparing sources...";
   matchesList.className = "evidence-list";
-  matchesList.textContent = "Preparing retrieved chunks...";
+  matchesList.innerHTML = `
+    <div class="evidence-empty-card">
+      <p class="evidence-empty-title">How evidence appears</p>
+      <ol class="evidence-empty-steps">
+        <li>Retrieve regulatory documents</li>
+        <li>Rank relevant passages</li>
+        <li>Extract regulatory rules</li>
+        <li>Generate grounded answer with citations</li>
+      </ol>
+      <p class="evidence-empty-note">What you'll see here after running a query: cited chunks, page references, and similarity scores.</p>
+    </div>
+  `;
   evidenceCount.textContent = "0";
   metricsGrid.innerHTML = `
     <div class="metric-tile"><span class="metric-label">Top K</span><strong>...</strong></div>
@@ -179,20 +247,26 @@ function renderConfidence(data) {
 
   if (!confidenceScores.length) {
     confidenceCard.classList.add("is-empty");
-    confidenceValue.textContent = "n/a";
+    confidenceValue.textContent = "Unavailable";
+    confidenceBand.textContent = "Confidence: Not enough grounded citations";
+    confidenceBand.className = "confidence-band band-low";
     confidenceFill.style.width = "0%";
-    confidenceNote.textContent = "Derived from citation scores. No grounded citations were available.";
+    confidenceNote.textContent = "Confidence is derived from citation coverage and source authority.";
     return;
   }
 
   const averageConfidence = Math.round(
     confidenceScores.reduce((sum, value) => sum + value, 0) / confidenceScores.length,
   );
+  const confidenceBandValue = averageConfidence >= 80 ? "High" : averageConfidence >= 60 ? "Medium" : "Low";
+  const confidenceBandClass =
+    confidenceBandValue === "High" ? "band-high" : confidenceBandValue === "Medium" ? "band-medium" : "band-low";
   confidenceCard.classList.remove("is-empty");
   confidenceValue.textContent = `${averageConfidence}%`;
+  confidenceBand.textContent = `Confidence: ${confidenceBandValue}`;
+  confidenceBand.className = `confidence-band ${confidenceBandClass}`;
   confidenceFill.style.width = `${averageConfidence}%`;
-  confidenceNote.textContent =
-    `Derived from ${confidenceScores.length} citation source${confidenceScores.length === 1 ? "" : "s"}.`;
+  confidenceNote.textContent = "Derived from citation coverage and source authority.";
 }
 
 function highlightTerms(text, query) {
@@ -405,8 +479,19 @@ function renderMatches(data) {
   evidenceCount.textContent = String(evidence.length);
 
   if (!evidence.length) {
-    matchesList.className = "evidence-list empty-text";
-    matchesList.textContent = "No retrieved chunks returned.";
+    matchesList.className = "evidence-list";
+    matchesList.innerHTML = `
+      <div class="evidence-empty-card">
+        <p class="evidence-empty-title">How it works</p>
+        <ol class="evidence-empty-steps">
+          <li>Retrieve regulatory documents</li>
+          <li>Rank relevant passages</li>
+          <li>Extract regulatory rules</li>
+          <li>Generate grounded answer with citations</li>
+        </ol>
+        <p class="evidence-empty-note">What you'll see here after running a query: the exact retrieved chunks, page references, and match scores.</p>
+      </div>
+    `;
     return;
   }
 
@@ -455,7 +540,29 @@ topKInput.addEventListener("input", syncTopKValue);
 syncTopKValue();
 
 questionInput.addEventListener("input", updateComposerPreview);
+questionInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") {
+    return;
+  }
+  if (!event.ctrlKey && !event.metaKey) {
+    return;
+  }
+  event.preventDefault();
+  form.requestSubmit();
+});
 updateComposerPreview();
+if (inlineRunButton) {
+  inlineRunButton.addEventListener("click", () => {
+    form.requestSubmit();
+  });
+}
+renderStepper("query", activeRerankerEnabled);
+if (rerankerInput) {
+  rerankerInput.addEventListener("change", () => {
+    activeRerankerEnabled = rerankerInput.checked;
+    renderStepper("query", activeRerankerEnabled);
+  });
+}
 
 exampleButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -515,7 +622,8 @@ form.addEventListener("submit", async (event) => {
   };
 
   submitButton.disabled = true;
-  composerPreview.textContent = `Running: ${currentQuestion}`;
+  activeRerankerEnabled = payload.reranker_enabled;
+  composerPreview.textContent = `Running query: ${currentQuestion}`;
   resetOutputForNewRequest();
   startLoadingStages(payload.reranker_enabled);
 

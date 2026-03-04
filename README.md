@@ -89,15 +89,39 @@ Then open `http://127.0.0.1:8000` in your browser.
 
 ## Answer Modes
 
-- General questions still use the existing citation-grounded answer synthesis path.
-- List/table-heavy prompts now use an extraction-first path that attempts to build bullet lists directly from retrieved evidence.
+- General questions still use the citation-grounded answer synthesis path.
+- List/table-heavy prompts use an extraction-first path that attempts to build bullet lists directly from retrieved evidence.
+- List-mode retrieval now applies intent-specific coverage logic:
+- multi-query rewrites for field/list phrasing
+- preference for `line_preserved` chunks when available
+- same-document adjacent-page expansion for broader table/list coverage
+- Count-sensitive prompts for supported domains now prefer structured count handlers over generic sentence extraction.
 - Each extracted list item is grounded to at least one retrieved chunk using `[doc_title, p. X, chunk Y]`.
-- If the retrieved chunks do not contain enough clean list/table evidence, the system now responds with `Not found in retrieved evidence.` instead of inventing or over-compressing list content.
+- If the retrieved chunks do not contain enough clean list/table evidence, the system responds with `Not found in retrieved evidence.` instead of inventing or over-compressing list content.
+- If a broad count cannot be supported by an explicit authoritative total in the corpus, the system responds with `The sources do not specify this.`
+
+List-mode retrieval breadth can increase latency versus general Q&A. The tradeoff is improved coverage for table/list questions.
 
 This is especially relevant for prompts such as:
 - `What information must appear on a UAE tax invoice?`
 - `What fields are required for ... ?`
 - `What must include ... ?`
+- `How many different business roles are there for UAE e-invoicing?`
+- `What is the total count of data requirements as per PINT-AE?`
+
+### Structured Count Handling
+
+The current structured count handlers cover a small set of high-value question classes:
+
+- UAE e-invoicing business-role counts from Appendix 3 of the guidelines (`15.1` through `15.5`).
+- PINT-AE example-scoped business-term reference counts for the indexed `Standard invoice Mandatory fields` example.
+- UAE electronic tax invoice mandatory field counts and total numbered field blocks from the mandatory-fields source.
+
+These handlers are intentionally conservative:
+
+- Broad count questions only return a number when the corpus exposes a directly countable structure.
+- If the corpus only supports a narrower example-scoped count, the answer is explicitly scoped to that example.
+- If no single authoritative total is stated, the answer falls back to `The sources do not specify this.`
 
 ## Useful Commands
 
@@ -123,6 +147,7 @@ Useful commands:
 .\.venv\Scripts\python.exe -m src.run_eval --topics uae_vat --max-cases 8
 .\.venv\Scripts\python.exe -m src.run_eval --question-ids vat_registration_thresholds,vat_threshold_calculation
 .\.venv\Scripts\python.exe -m src.run_eval --resume-from reports\eval_YYYYMMDD_HHMMSS.jsonl
+.\.venv\Scripts\python.exe scripts/smoke_trace.py --question-bank eval/question_bank_smoke.jsonl
 ```
 
 The evaluator now supports case filters, resume-from-report, incremental markdown summaries, a sidecar `.meta.json` run log, and per-config retrieval metrics such as `doc_hit@k`, `page_hit@k`, `citation_hit@k`, citation precision, canonical-source preference, and `not_stated` match rate.
@@ -135,12 +160,29 @@ See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the full workflow and metric 
 - Persistent ChromaDB indexing under `index_store/`.
 - Citation-first answers for internal research.
 - Extraction-first list/table answers for list-heavy regulatory prompts.
+- Intent-aware deterministic handlers for selected high-risk classes:
+- `COMPARE` (for example, TIN vs TRN phrasing)
+- `YES_NO_SCOPE` (scope/applicability phrasing)
+- `RULE_TIMING` (when/by-when issuance and deadline phrasing)
+- `LEGAL_BASIS` (article/law/clause reference phrasing)
 - Retrieval-only validation mode for debugging.
 - Structured handling for some high-risk regulatory question classes, including:
 - `TIN` / `TRN` / Participant Identifier interpretation questions
 - Tax Group / VAT Group identifier questions
 - UAE electronic invoice mandatory field counts and field lists
-- PINT-AE business term, codelist, and selected schematron rule lookups
+- UAE e-invoicing business-role count questions
+- PINT-AE business term, codelist, selected schematron rule, and scoped example-count lookups
+- A local browser UI with:
+- prompt suggestions
+- inline citation markers
+- evidence/source panels
+- citation-derived confidence indicators
+
+## Known Limitations
+
+- The system is still largely heuristic and extraction-driven; it is not a full regulatory reasoning engine.
+- OCR/source formatting quality materially affects answer precision, especially for legal-basis and definition-style prompts.
+- Confidence indicators reflect citation/coverage signals, not a legal correctness guarantee.
 
 ## Portability
 
@@ -165,6 +207,14 @@ Not stated:
 ```
 
 Retrieval output must always show `doc_title`, `page number`, and `source_path`.
+
+The current implementation follows a stricter practical rule set:
+
+- Use only retrieved or directly loaded corpus evidence.
+- Prefer direct extraction over summarization for lists, tables, and countable structures.
+- If a list is requested, prefer bullet output.
+- If the answer is not explicitly supported, return `The sources do not specify this.`
+- Avoid presenting a narrow example count as a universal total unless the answer is explicitly scoped.
 
 ## Disclaimer
 

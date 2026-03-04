@@ -20,6 +20,11 @@
         </div>
         <h1>UAE Regulatory RAG Console</h1>
         <p class="sidebar-subhead">Grounded regulatory research over UAE source documents.</p>
+        <div class="trust-strip" aria-label="Assistant capabilities">
+          <span class="trust-pill">Grounded</span>
+          <span class="trust-pill">Cited</span>
+          <span class="trust-pill">Auditable</span>
+        </div>
       </div>
 
       <form id="query-form" class="sidebar-form">
@@ -91,6 +96,11 @@
           <p class="eyebrow accent">Ask</p>
           <h2>Ask a question about UAE regulations...</h2>
           <p class="composer-subtext">The answer below stays grounded in retrieved regulatory evidence.</p>
+          <div class="composer-utility">
+            <span class="utility-pill">Evidence-first mode</span>
+            <span class="utility-pill">Inline citations</span>
+            <span class="utility-pill">Transparent retrieval</span>
+          </div>
         </div>
 
         <label class="prompt-shell" for="question">
@@ -99,23 +109,44 @@
             name="question"
             form="query-form"
             rows="5"
-            placeholder="Ask a question about UAE regulations..."
+            placeholder="Ask a question about UAE regulations... (for example: What are mandatory fields for UAE electronic invoices?)"
             required
           ></textarea>
         </label>
+        <div class="prompt-guidance" aria-live="polite">
+          <p class="guidance-title">Example questions</p>
+          <ul class="guidance-list">
+            <li>What are mandatory fields for UAE electronic invoices?</li>
+            <li>What are VAT registration thresholds in the UAE?</li>
+            <li>What information must appear on a UAE tax invoice?</li>
+          </ul>
+        </div>
+        <div class="prompt-footer">
+          <span id="question-count" class="question-count">0 characters</span>
+          <div class="prompt-actions">
+            <span class="submit-shortcut"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to run query</span>
+            <button id="run-query-inline" class="subtle-run-button" type="button">Run query</button>
+          </div>
+        </div>
 
-        <div id="inline-progress" class="inline-progress" hidden>
-          <div class="progress-chip" data-stage="searching">
-            <span class="progress-dot"></span>
-            <span>Searching regulatory corpus...</span>
-          </div>
-          <div class="progress-chip" data-stage="retrieving">
-            <span class="progress-dot"></span>
-            <span>Retrieving documents...</span>
-          </div>
-          <div class="progress-chip" data-stage="generating">
-            <span class="progress-dot"></span>
-            <span>Generating answer...</span>
+        <div id="inline-progress" class="inline-progress">
+          <div class="retrieval-stepper" role="status" aria-live="polite" aria-label="Retrieval pipeline status">
+            <div class="stepper-item" data-step="query">
+              <span class="stepper-dot" aria-hidden="true"></span>
+              <span class="stepper-label">Query</span>
+            </div>
+            <div class="stepper-item" data-step="retrieval">
+              <span class="stepper-dot" aria-hidden="true"></span>
+              <span class="stepper-label">Retrieval</span>
+            </div>
+            <div class="stepper-item" data-step="reranking">
+              <span class="stepper-dot" aria-hidden="true"></span>
+              <span id="reranking-label" class="stepper-label">Reranking</span>
+            </div>
+            <div class="stepper-item" data-step="answer">
+              <span class="stepper-dot" aria-hidden="true"></span>
+              <span class="stepper-label">Answer</span>
+            </div>
           </div>
         </div>
 
@@ -140,6 +171,10 @@
             <h3>Answer</h3>
             <p id="routing-line" class="card-meta">No query submitted yet.</p>
           </div>
+          <div class="answer-signals" aria-hidden="true">
+            <span class="signal-pill">Anchored sources</span>
+            <span class="signal-pill">Confidence score</span>
+          </div>
         </div>
 
         <div id="answer-content" class="answer-content empty-text">Answers will appear here after you run a query.</div>
@@ -147,12 +182,13 @@
         <div id="confidence-card" class="confidence-card is-empty">
           <div class="confidence-head">
             <span class="confidence-label">Answer confidence</span>
-            <span id="confidence-value" class="confidence-value">n/a</span>
+            <span id="confidence-value" class="confidence-value">Not yet rated</span>
           </div>
+          <p id="confidence-band" class="confidence-band">Confidence: Awaiting first query</p>
           <div class="confidence-meter" aria-hidden="true">
             <div id="confidence-fill" class="confidence-fill"></div>
           </div>
-          <p id="confidence-note" class="confidence-note">Derived from citation scores.</p>
+          <p id="confidence-note" class="confidence-note">Confidence is derived from citation coverage and source authority.</p>
         </div>
       </section>
 
@@ -182,7 +218,18 @@
             <h4>Retrieved documents</h4>
             <span id="evidence-count" class="count-pill">0</span>
           </div>
-          <div id="matches-list" class="evidence-list empty-text">No retrieved chunks yet.</div>
+          <div id="matches-list" class="evidence-list">
+            <div class="evidence-empty-card">
+              <p class="evidence-empty-title">How it works</p>
+              <ol class="evidence-empty-steps">
+                <li>Retrieve regulatory documents</li>
+                <li>Rank relevant passages</li>
+                <li>Extract regulatory rules</li>
+                <li>Generate grounded answer with citations</li>
+              </ol>
+              <p class="evidence-empty-note">What you'll see here after running a query: the exact retrieved chunks, page references, and match scores.</p>
+            </div>
+          </div>
         </div>
 
         <div class="evidence-section">
