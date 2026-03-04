@@ -255,6 +255,10 @@ function scrollToEvidenceChunk(chunkId) {
   flashEvidenceCard(target);
 }
 
+function hasEmbeddedChunkReference(text) {
+  return /\[[^\]]+, p\. [^\]]+, chunk [^\]]+\]/i.test(String(text || ""));
+}
+
 function renderAnswer(data) {
   answerCard.classList.remove("error");
   answerContent.classList.remove("empty-text");
@@ -283,21 +287,23 @@ function renderAnswer(data) {
         if (!text) {
           return "";
         }
-        const markers = (Array.isArray(segment.citation_numbers) ? segment.citation_numbers : [])
-          .map((number) => {
-            const citation = citations.find((entry) => Number(entry.citation_number) === Number(number));
-            if (!citation) {
-              return "";
-            }
-            const tooltipLines = [
-              `<strong>${escapeHtml(citation.doc_title || "Unknown document")}</strong>`,
-              `<span>Page ${escapeHtml(citation.page ?? "n/a")}</span>`,
-              `<span>${escapeHtml(citation.snippet || "No preview available.")}</span>`,
-            ].join("");
-            return `<button type="button" class="citation-anchor" data-citation-number="${escapeHtml(number)}" data-chunk-id="${escapeHtml(citation.chunk_id || "")}" aria-label="Open source ${escapeHtml(number)}">[${escapeHtml(number)}]<span class="citation-tooltip">${tooltipLines}</span></button>`;
-          })
-          .filter(Boolean)
-          .join(" ");
+        const markers = hasEmbeddedChunkReference(normalizedText)
+          ? ""
+          : (Array.isArray(segment.citation_numbers) ? segment.citation_numbers : [])
+            .map((number) => {
+              const citation = citations.find((entry) => Number(entry.citation_number) === Number(number));
+              if (!citation) {
+                return "";
+              }
+              const tooltipLines = [
+                `<strong>${escapeHtml(citation.doc_title || "Unknown document")}</strong>`,
+                `<span>Page ${escapeHtml(citation.page ?? "n/a")}</span>`,
+                `<span>${escapeHtml(citation.snippet || "No preview available.")}</span>`,
+              ].join("");
+              return `<button type="button" class="citation-anchor" data-citation-number="${escapeHtml(number)}" data-chunk-id="${escapeHtml(citation.chunk_id || "")}" aria-label="Open source ${escapeHtml(number)}">[${escapeHtml(number)}]<span class="citation-tooltip">${tooltipLines}</span></button>`;
+            })
+            .filter(Boolean)
+            .join(" ");
         const suffix = markers ? ` ${markers}` : "";
         return allBulletLike
           ? `<li class="answer-item">${text}${suffix}</li>`

@@ -49,7 +49,15 @@ This creates:
 - `docs_processed/` with extracted and normalized JSON
 - `index_store/` with the persistent ChromaDB index
 
+The ingester now preserves both:
+- normalized page text (`text`)
+- line-preserved page text (`text_line_preserved`) for PDFs
+
+For `e_invoicing` documents, ingestion also adds an extra `line_preserved` chunk variant with smaller chunk windows to keep table/list rows from being split as aggressively. New chunk metadata includes `text_variant` (`normalized` or `line_preserved`).
+
 These generated folders are now allowed in Git so you can optionally back them up to GitHub for portability. If they are already committed, another machine can clone the repo and use the current index directly. If the source corpus changes, re-run ingestion to refresh them.
+
+If you already indexed e-invoicing PDFs before this update, re-run ingestion once so the new line-preserved chunks are added to the index. This change is additive and backward-compatible: older processed files still work, but they do not benefit from the improved table-preserving chunking until you rebuild the index.
 
 3. Run the question interface in interactive mode:
 
@@ -78,6 +86,18 @@ Then open `http://127.0.0.1:8000` in your browser.
 - `--show-matches` shows the retrieved match previews for debugging.
 - `--no-rich` forces plain-text output.
 - `src.serve_ui` provides a browser-based local UI for the same local index.
+
+## Answer Modes
+
+- General questions still use the existing citation-grounded answer synthesis path.
+- List/table-heavy prompts now use an extraction-first path that attempts to build bullet lists directly from retrieved evidence.
+- Each extracted list item is grounded to at least one retrieved chunk using `[doc_title, p. X, chunk Y]`.
+- If the retrieved chunks do not contain enough clean list/table evidence, the system now responds with `Not found in retrieved evidence.` instead of inventing or over-compressing list content.
+
+This is especially relevant for prompts such as:
+- `What information must appear on a UAE tax invoice?`
+- `What fields are required for ... ?`
+- `What must include ... ?`
 
 ## Useful Commands
 
@@ -114,6 +134,7 @@ See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the full workflow and metric 
 - Local ingestion of UAE VAT, UAE e-invoicing, and UAE PINT source materials.
 - Persistent ChromaDB indexing under `index_store/`.
 - Citation-first answers for internal research.
+- Extraction-first list/table answers for list-heavy regulatory prompts.
 - Retrieval-only validation mode for debugging.
 - Structured handling for some high-risk regulatory question classes, including:
 - `TIN` / `TRN` / Participant Identifier interpretation questions
@@ -127,6 +148,7 @@ See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the full workflow and metric 
 - The generated `docs_processed/` and `index_store/` folders can be committed to GitHub as a backup snapshot.
 - This makes it easier to open the project on another machine with the same source corpus, processed data, and current index.
 - If you add or change source documents, run ingestion again and commit the refreshed generated folders if you want GitHub to reflect the latest snapshot.
+- Future ingestion remains non-disruptive after the text-variant update because the richer processed schema is additive. New documents can be ingested normally; a rebuild is only recommended when you want older indexed PDFs to benefit from the new line-preserved chunks.
 
 ## Answering Rules
 

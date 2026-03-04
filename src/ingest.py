@@ -22,6 +22,7 @@ COLLECTION_NAME = "uae_reg_library"
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 200
+LINE_PRESERVED_CHUNK_SIZE = 800
 LOW_TEXT_PAGE_CHAR_THRESHOLD = 40
 MOSTLY_EMPTY_PAGE_RATIO = 0.8
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
@@ -43,6 +44,30 @@ def find_zip_files(root: Path) -> list[Path]:
 def normalize_text(text: str) -> str:
     # Collapse whitespace while preserving readable paragraph spacing.
     return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_line_preserved_text(text: str) -> str:
+    """Collapse noisy spacing but preserve line breaks for table-heavy pages."""
+    normalized = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in normalized.split("\n")]
+
+    cleaned_lines: list[str] = []
+    blank_pending = False
+    for line in lines:
+        if not line:
+            if cleaned_lines:
+                blank_pending = True
+            continue
+
+        if blank_pending:
+            cleaned_lines.append("")
+            blank_pending = False
+        cleaned_lines.append(line)
+
+    while cleaned_lines and cleaned_lines[-1] == "":
+        cleaned_lines.pop()
+
+    return "\n".join(cleaned_lines).strip()
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -126,9 +151,16 @@ def extract_pdf_pages(pdf_path: Path) -> tuple[list[dict[str, object]], bool]:
     for page_index, page in enumerate(reader.pages, start=1):
         raw_text = page.extract_text() or ""
         normalized = normalize_text(raw_text)
+        line_preserved = normalize_line_preserved_text(raw_text)
         if len(normalized) < LOW_TEXT_PAGE_CHAR_THRESHOLD:
             low_text_pages += 1
-        pages.append({"page_num": page_index, "text": normalized})
+        pages.append(
+            {
+                "page_num": page_index,
+                "text": normalized,
+                "text_line_preserved": line_preserved,
+            }
+        )
 
     page_count = len(pages)
     mostly_empty = page_count > 0 and (low_text_pages / page_count) >= MOSTLY_EMPTY_PAGE_RATIO
@@ -144,9 +176,16 @@ def extract_pdf_pages_from_bytes(pdf_bytes: bytes) -> tuple[list[dict[str, objec
     for page_index, page in enumerate(reader.pages, start=1):
         raw_text = page.extract_text() or ""
         normalized = normalize_text(raw_text)
+        line_preserved = normalize_line_preserved_text(raw_text)
         if len(normalized) < LOW_TEXT_PAGE_CHAR_THRESHOLD:
             low_text_pages += 1
-        pages.append({"page_num": page_index, "text": normalized})
+        pages.append(
+            {
+                "page_num": page_index,
+                "text": normalized,
+                "text_line_preserved": line_preserved,
+            }
+        )
 
     page_count = len(pages)
     mostly_empty = page_count > 0 and (low_text_pages / page_count) >= MOSTLY_EMPTY_PAGE_RATIO
@@ -163,7 +202,8 @@ def decode_text_bytes(data: bytes) -> str:
 
 
 def extract_text_pages_from_bytes(data: bytes) -> tuple[list[dict[str, object]], bool]:
-    normalized = normalize_text(decode_text_bytes(data))
+    raw_text = decode_text_bytes(data)
+    normalized = normalize_text(raw_text)
     pages = [{"page_num": 1, "text": normalized}]
     mostly_empty = len(normalized) < LOW_TEXT_PAGE_CHAR_THRESHOLD
     return pages, mostly_empty
@@ -198,6 +238,7 @@ def iter_chunks(
                 "page": page_num,
                 "chunk": chunk_index,
                 "doc_title": doc_title,
+                "text_variant": "normalized",
             }
             chunk_id = make_chunk_id(source_path, page_num, chunk_index, chunk)
             yield chunk, metadata, chunk_id
@@ -214,7 +255,7 @@ def iter_chunks_for_source(
 
     for page in pages:
         page_num = int(page["page_num"])
-        text = str(page["text"])
+        text = str(page.get("text", ""))
         for chunk_index, chunk in enumerate(chunk_text(text), start=1):
             metadata = {
                 "source_path": source_path,
@@ -224,8 +265,35 @@ def iter_chunks_for_source(
                 "doc_title": doc_title,
                 "doc_family": doc_family,
                 "source_type": source_type,
+                "text_variant": "normalized",
             }
             chunk_id = make_chunk_id(source_path, page_num, chunk_index, chunk)
+            yield chunk, metadata, chunk_id
+
+        line_preserved_text = str(page.get("text_line_preserved", "")).strip()
+        if doc_family != "e_invoicing" or not line_preserved_text:
+            continue
+
+        for chunk_index, chunk in enumerate(
+            chunk_text(line_preserved_text, chunk_size=LINE_PRESERVED_CHUNK_SIZE, overlap=CHUNK_OVERLAP),
+            start=1,
+        ):
+            metadata = {
+                "source_path": source_path,
+                "topic": topic,
+                "page": page_num,
+                "chunk": chunk_index,
+                "doc_title": doc_title,
+                "doc_family": doc_family,
+                "source_type": source_type,
+                "text_variant": "line_preserved",
+            }
+            chunk_id = make_chunk_id(
+                source_path,
+                page_num,
+                chunk_index,
+                f"line_preserved::{chunk}",
+            )
             yield chunk, metadata, chunk_id
 
 
