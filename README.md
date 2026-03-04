@@ -63,12 +63,21 @@ These generated folders are now allowed in Git so you can optionally back them u
 .\.venv\Scripts\python.exe src/ask.py "What are mandatory fields for UAE electronic invoice?"
 ```
 
+5. Run the local web UI:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.serve_ui
+```
+
+Then open `http://127.0.0.1:8000` in your browser.
+
 ## Query Modes
 
 - Default mode returns an answer first, then citations used.
 - `--retrieval-only` skips answer synthesis and returns retrieval output only.
 - `--show-matches` shows the retrieved match previews for debugging.
 - `--no-rich` forces plain-text output.
+- `src.serve_ui` provides a browser-based local UI for the same local index.
 
 ## Useful Commands
 
@@ -82,6 +91,23 @@ These generated folders are now allowed in Git so you can optionally back them u
 .\.venv\Scripts\python.exe src/ask.py "What are the allowed codes in the PINT-AE transaction type code list?"
 .\.venv\Scripts\python.exe src/ask.py "What does rule ibr-139-ae say in PINT-AE?"
 ```
+
+## Evaluation
+
+Use `src/run_eval.py` to measure retrieval and grounding quality after pipeline changes. It is an evaluation harness, not a training loop.
+
+Useful commands:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_eval --small-test
+.\.venv\Scripts\python.exe -m src.run_eval --topics uae_vat --max-cases 8
+.\.venv\Scripts\python.exe -m src.run_eval --question-ids vat_registration_thresholds,vat_threshold_calculation
+.\.venv\Scripts\python.exe -m src.run_eval --resume-from reports\eval_YYYYMMDD_HHMMSS.jsonl
+```
+
+The evaluator now supports case filters, resume-from-report, incremental markdown summaries, a sidecar `.meta.json` run log, and per-config retrieval metrics such as `doc_hit@k`, `page_hit@k`, `citation_hit@k`, citation precision, canonical-source preference, and `not_stated` match rate.
+
+See [`docs/EVALUATION.md`](docs/EVALUATION.md) for the full workflow and metric definitions.
 
 ## Current Capabilities
 

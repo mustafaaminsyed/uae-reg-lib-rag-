@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UAE Regulatory RAG Console</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="dashboard-shell">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <p class="eyebrow">AI Regulatory Assistant</p>
+        <div class="brand-lockup" aria-label="Powered by Dariba Technologies">
+          <img class="brand-logo" src="/dariba-logo.png" alt="Dariba Technologies LLC logo">
+          <div class="brand-copy">
+            <span class="brand-label">Powered by</span>
+            <span class="brand-name">Dariba</span>
+          </div>
+        </div>
+        <h1>UAE Regulatory RAG Console</h1>
+        <p class="sidebar-subhead">Grounded regulatory research over UAE source documents.</p>
+      </div>
+
+      <form id="query-form" class="sidebar-form">
+        <details class="filter-group" open>
+          <summary><span class="icon-badge">Q</span><span>Query</span></summary>
+          <p class="group-note">Use the main prompt box to ask a grounded UAE regulatory question.</p>
+        </details>
+
+        <details class="filter-group" open>
+          <summary><span class="icon-badge">F</span><span>Filters</span></summary>
+          <div class="stack-grid">
+            <label class="field-block">
+              <span class="field-label">Topic</span>
+              <select id="topic" name="topic">
+                <option value="">Auto-detect</option>
+                <option value="uae_vat">UAE VAT</option>
+                <option value="uae_einvoicing">UAE E-Invoicing</option>
+                <option value="uae_pint">UAE PINT</option>
+              </select>
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">Document Family</span>
+              <select id="doc_family" name="doc_family">
+                <option value="">Auto-detect</option>
+                <option value="vat">VAT</option>
+                <option value="e_invoicing">E-Invoicing</option>
+                <option value="pint_ae">PINT-AE</option>
+              </select>
+            </label>
+          </div>
+        </details>
+
+        <details class="filter-group" open>
+          <summary><span class="icon-badge">R</span><span>Retrieval Settings</span></summary>
+          <div class="stack-grid">
+            <label class="field-block">
+              <span class="field-label">Top K Retrieval</span>
+              <div class="slider-row">
+                <input id="top_k" name="top_k" type="range" min="1" max="10" value="3">
+                <span id="top_k_value" class="slider-value">3</span>
+              </div>
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">Minimum Citations</span>
+              <select id="min_citations" name="min_citations">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </label>
+
+            <label class="toggle-row">
+              <input id="reranker_enabled" name="reranker_enabled" type="checkbox" checked>
+              <span>Enable reranker</span>
+            </label>
+          </div>
+        </details>
+
+        <button id="submit-button" class="primary-button" type="submit">Run Query</button>
+        <p id="status-line" class="sidebar-status">Ready.</p>
+      </form>
+    </aside>
+
+    <main class="main-workspace">
+      <section class="query-composer card">
+        <div class="composer-heading">
+          <p class="eyebrow accent">Ask</p>
+          <h2>Ask a question about UAE regulations...</h2>
+          <p class="composer-subtext">The answer below stays grounded in retrieved regulatory evidence.</p>
+        </div>
+
+        <label class="prompt-shell" for="question">
+          <textarea
+            id="question"
+            name="question"
+            form="query-form"
+            rows="5"
+            placeholder="Ask a question about UAE regulations..."
+            required
+          ></textarea>
+        </label>
+
+        <div id="inline-progress" class="inline-progress" hidden>
+          <div class="progress-chip" data-stage="searching">
+            <span class="progress-dot"></span>
+            <span>Searching regulatory corpus...</span>
+          </div>
+          <div class="progress-chip" data-stage="retrieving">
+            <span class="progress-dot"></span>
+            <span>Retrieving documents...</span>
+          </div>
+          <div class="progress-chip" data-stage="generating">
+            <span class="progress-dot"></span>
+            <span>Generating answer...</span>
+          </div>
+        </div>
+
+        <div class="example-prompt-row">
+          <button type="button" class="example-chip" data-question="What are mandatory fields for UAE electronic invoices?">
+            What are mandatory fields for UAE electronic invoices?
+          </button>
+          <button type="button" class="example-chip" data-question="What are VAT registration thresholds in the UAE?">
+            What are VAT registration thresholds in the UAE?
+          </button>
+          <button type="button" class="example-chip" data-question="What information must appear on a UAE tax invoice?">
+            What information must appear on a UAE tax invoice?
+          </button>
+        </div>
+
+        <p id="composer-preview" class="composer-preview">Results will appear below with grounded sources.</p>
+      </section>
+
+      <section class="answer-card card" id="answer-card">
+        <div class="card-header">
+          <div>
+            <h3>Answer</h3>
+            <p id="routing-line" class="card-meta">No query submitted yet.</p>
+          </div>
+        </div>
+
+        <div id="answer-content" class="answer-content empty-text">Answers will appear here after you run a query.</div>
+
+        <div id="confidence-card" class="confidence-card is-empty">
+          <div class="confidence-head">
+            <span class="confidence-label">Answer confidence</span>
+            <span id="confidence-value" class="confidence-value">n/a</span>
+          </div>
+          <div class="confidence-meter" aria-hidden="true">
+            <div id="confidence-fill" class="confidence-fill"></div>
+          </div>
+          <p id="confidence-note" class="confidence-note">Derived from citation scores.</p>
+        </div>
+      </section>
+
+      <section class="sources-card card">
+        <div class="card-header">
+          <div>
+            <h3>Sources</h3>
+            <p class="card-meta">Citations used to ground the answer.</p>
+          </div>
+        </div>
+
+        <div id="citations-list" class="sources-list empty-text">No sources yet.</div>
+      </section>
+    </main>
+
+    <aside class="evidence-rail">
+      <section class="evidence-card card">
+        <div class="card-header">
+          <div>
+            <h3>Evidence</h3>
+            <p class="card-meta">Retrieved documents and retrieval settings.</p>
+          </div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="subsection-head">
+            <h4>Retrieved documents</h4>
+            <span id="evidence-count" class="count-pill">0</span>
+          </div>
+          <div id="matches-list" class="evidence-list empty-text">No retrieved chunks yet.</div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="subsection-head">
+            <h4>Retrieval stats</h4>
+          </div>
+          <div id="metrics-grid" class="metrics-grid">
+            <div class="metric-tile">
+              <span class="metric-label">Top K</span>
+              <strong>n/a</strong>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Reranker</span>
+              <strong>n/a</strong>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Embedding</span>
+              <strong>n/a</strong>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Docs Retrieved</span>
+              <strong>n/a</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <template id="citation-template">
+    <details class="source-card">
+      <summary>
+        <div class="source-title-row">
+          <span class="source-title"></span>
+          <div class="source-actions">
+            <button type="button" class="source-jump-button" aria-label="Jump to evidence">Jump</button>
+            <span class="source-score"></span>
+          </div>
+        </div>
+        <div class="source-meta"></div>
+      </summary>
+      <div class="source-body"></div>
+    </details>
+  </template>
+
+  <template id="match-template">
+    <details class="evidence-item">
+      <summary>
+        <div class="chunk-title-row">
+          <span class="chunk-title"></span>
+          <span class="chunk-score"></span>
+        </div>
+        <div class="chunk-meta"></div>
+      </summary>
+      <div class="chunk-body"></div>
+      <div class="chunk-path"></div>
+    </details>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
